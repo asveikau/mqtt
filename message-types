@@ -1,0 +1,166 @@
+# This is meant to serve as a declarative spec of various MQTT message types,
+# such as to generate a parser and writer.
+
+[Connect]
+id         CONNECT
+string     ProtocolName
+byte       Version
+byte       Flags
+int16      KeepAlive
+properties
+   prop int32  SessionExpiryInterval
+   prop int16  ReceiveMaximum
+   prop int32  MaximumPacketSize
+   prop int16   TopicAliasMaximum
+   prop byte   RequestResponseInfo
+   prop byte   RequestProblemInfo
+   #NB: user property
+   prop string AuthMethod
+   prop blob   AuthData
+string     ClientId
+cond       (Packet->Flags & WillFlag)
+   properties WillProps
+      prop int32  WillDelayInterval
+      prop byte   PayloadFormatIndicator
+      prop int32  MessageExpiryInterval
+      prop string ContentType
+      prop string ResponseTopic
+      prop blob   CorrelationData
+      #NB: user property
+   string  WillTopic
+   blob    WillPayload
+cond       (Packet->Flags & UserNameFlag)
+   string  UserName
+cond       (Packet->Flags & PasswordFlag)
+   string  Password
+
+[ConnAck]
+id         CONNACK
+byte       Flags
+byte       Reason
+properties
+   prop int32  MessageExpiryInterval
+   prop int16  ReceiveMaximum
+   prop byte   MaximumQos
+   prop byte   RetainAvailable
+   prop int32  MaximumPacketSize
+   prop string AssignedClientId
+   prop int16  TopicAliasMaximum
+   prop string ReasonString
+   prop byte   SubIdAvail
+   #NB: user property
+
+[Publish]
+id         PUBLISH
+string     Topic
+cond       (Header->Flags & (QosBit0|QosBit1))
+   int16   PacketId
+properties
+   prop byte   PayloadFormatIndicator
+   prop int32  MessageExpiryInterval
+   prop int16  TopicAlias
+   prop string ResponseTopic
+   prop blob   CorrelationData
+   #NB: user property
+   prop vbi    SubscriptionId
+   prop string ContentType
+#nb: payload = value
+
+# Only sent for QOS 1 publish
+[PubAck]
+id         PUBACK
+int16      PacketId
+cond       READER(reader->remaining) WRITER(Packet->Reason)
+   byte       Reason
+   properties
+      prop string ReasonString
+      #nb: user property
+
+# Only sent for QOS 2 publish
+[PubRec]
+id         PUBREC
+int16      PacketId
+cond       READER(reader->remaining) WRITER(Packet->Reason)
+   byte       Reason
+   properties
+      prop string ReasonString
+      #nb: user property
+
+[PubRel]
+id         PUBREL
+int16      PacketId
+cond       READER(reader->remaining) WRITER(Packet->Reason)
+   byte       Reason
+   properties
+      prop string ReasonString
+      #nb: user property
+
+[PubComp]
+id         PUBCOMP
+int16      PacketId
+cond       READER(reader->remaining) WRITER(Packet->Reason)
+   byte       Reason
+   properties
+      prop string ReasonString
+      #nb: user property
+
+[Subscribe]
+id         SUBSCRIBE
+int16      PacketId
+properties
+   prop vbi SubscriptionId
+   #nb: user property
+list
+   string  TopicFilter
+   byte    SubOptions
+
+[SubAck]
+id         SUBACK
+int16      PacketId
+properties
+   prop string ReasonString
+   #nb: user property
+list
+   byte    Reason
+
+[Unsubscribe]
+id         UNSUBSCRIBE
+int16      PacketId
+properties
+   #nb: user property
+list
+   string  TopicFilter
+
+[UnsubAck]
+id         UNSUBACK
+int16      PacketId
+properties
+   prop string ReasonString
+   #nb: user property
+list
+   byte    Reason
+
+[PingReq]
+id         PINGREQ
+
+[PingResp]
+id         PINGRESP
+
+[Disconnect]
+id         DISCONNECT
+byte       Reason
+cond       READER(reader->remaining) WRITER(Packet->nProps)
+   properties
+      prop int32  SessionExpiryInterval
+      prop string ReasonString
+      #nb: user property
+      prop string ServerReference
+
+[Auth]
+id         AUTH
+byte       Reason
+properties
+   prop string AuthMethod
+   prop blob   AuthData
+   prop string ReasonString
+   #nb: user property
