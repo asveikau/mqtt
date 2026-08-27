@@ -13,17 +13,17 @@ transcribed to C types.
 
 This has:
 
-* proto.h, basic types and declarations from the spec
-* messages.h, an abstraction for parsed MQTT packets
+* [proto.h](https://github.com/asveikau/mqtt/blob/master/include/mqtt/proto.h), basic types and declarations from the spec
+* [messages.h](https://github.com/asveikau/mqtt/blob/master/include/mqtt/messages.h), an abstraction for parsed MQTT packets
 * Generated code for the different message types
-* Reader and writter interfaces, which can deserialize and serialize packets
+* [Reader](https://github.com/asveikau/mqtt/blob/master/include/mqtt/reader.h) and [writer](https://github.com/asveikau/mqtt/blob/master/include/mqtt/writer.h) interfaces, which can deserialize and serialize packets
 
 ## The client layer
 
 This piece is written in C++, with a public API callable from C.
 This is an opinionated client library.
 
-See client.h.
+See [client.h](https://github.com/asveikau/mqtt/blob/master/include/mqtt/client.h).
 
 I/O is abstracted into a small set of callbacks, and you can provide your own, but the provided reference implementation is a default set of callbacks calling into another library of mine, [libpollster](http://github.com/asveikau/pollster).
 This cross platform library provides an event loop, I/O multiplexing, and TLS support. 
