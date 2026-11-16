@@ -33,11 +33,138 @@ usage()
 
    fprintf(stderr, "usage: %s [-u user] [-p passwordfile] [-tls] host[:port]\n"
                    "          [-subscribe topic]\n"
+#ifndef _WINDOWS
+                   "          [-exec subscription_script [args ...] ;]\n"
+#endif
                    "          [-publish topic -utf8 string [-retain]]\n"
                    "          [-qos <0-2>]\n"
                    "          [-keepalive <seconds>]\n"
                    "          [-wait]\n", argv0);
    return 1;
+}
+
+struct
+{
+   char **argv;
+   int argc;
+} PublishScript = {
+   nullptr,
+   0,
+};
+
+#ifndef _WINDOWS
+
+#include <unistd.h>
+#include <signal.h>
+#include <errno.h>
+#include <common/arraysize.h>
+#include <common/closefrom.h>
+#include <common/minmax.h>
+#include <limits.h>
+
+static void
+PayloadToScript(const char *topic, const unsigned char *data, size_t length)
+{
+   int r = 1;
+
+   pid_t pid = fork();
+   if (pid == -1)
+      perror("fork");
+   else if (!pid)
+   {
+      closefrom(3);
+      int p[2];
+
+      if (pipe(p))
+      {
+         perror("pipe");
+      }
+      else if ((pid = fork()) == -1)
+      {
+         perror("fork");
+      }
+      else if (!pid)
+      {
+         static const char prefix[] = "MQTT_TOPIC=";
+         size_t topicLen = strlen(topic);
+         char *topicEnv = (char*)malloc(sizeof(prefix) + topicLen);
+
+         if (!topicEnv)
+         {
+            perror("malloc");
+            exit(r);
+         }
+
+         memcpy(topicEnv, prefix, ARRAY_SIZE(prefix)-1);
+         memcpy(topicEnv + ARRAY_SIZE(prefix)-1, topic, topicLen+1);
+
+         putenv(topicEnv);
+
+         char *args[PublishScript.argc + 1];
+         memcpy(args, PublishScript.argv, PublishScript.argc * sizeof(char*));
+         args[PublishScript.argc] = nullptr;
+
+         dup2(p[0], 0);
+         close(p[0]);
+         close(p[1]);
+
+         execvp(*args, args);
+      }
+      else
+      {
+         close(p[0]);
+         signal(SIGPIPE, SIG_IGN);
+
+         while (length)
+         {
+            int wr = write(p[1], data, MIN(length, INT_MAX));
+
+            if (wr < 0)
+            {
+               if (errno == EINTR)
+                  continue;
+            }
+            if (wr <= 0)
+               break;
+
+            length -= wr;
+            data += wr;
+
+            if (!length)
+               r = 0;
+         }
+
+         close(p[1]);
+      }
+      exit(r);
+   }
+}
+
+#else
+
+static void
+PayloadToScript(const char *topic, const unsigned char *data, size_t length)
+{
+   // TODO: port this to windows
+}
+
+#endif
+
+static void
+OnPublish(const char *topic, const unsigned char *data, size_t length)
+{
+   if (PublishScript.argv)
+   {
+      PayloadToScript(topic, data, length);
+      return;
+   }
+
+   printf("%s: ", topic);
+   for (size_t i=0; i<length; ++i)
+   {
+      fputc(data[i], stdout);
+   }
+   puts("");
 }
 
 int
@@ -229,6 +356,20 @@ main(int argc, char **argv)
                return usage();
             args.KeepAlive = keepAlive;
          }
+         else if (!strcmp(arg, "exec"))
+         {
+            i++;
+            char **a = argv+i;
+            int n = 0;
+            while (i < argc && strcmp(argv[i], ";"))
+            {
+               ++i;
+               ++n;
+            }
+
+            PublishScript.argv = a;
+            PublishScript.argc = n;
+         }
          else
          {
             return usage();
@@ -325,12 +466,7 @@ main(int argc, char **argv)
             if (!topic)
                ERROR_SET(err, nomem);
 
-            printf("%s: ", topic);
-            for (size_t i=0; i<pkt->AdditionalPayloadLength; ++i)
-            {
-               fputc(pkt->AdditionalPayload[i], stdout);
-            }
-            puts("");
+            OnPublish(topic, pkt->AdditionalPayload, pkt->AdditionalPayloadLength);
 
          exit:
             waitUnref();

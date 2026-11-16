@@ -49,6 +49,14 @@ Publish `topic`, with a payload of the UTF-8 string `string`.  `-retain` enables
 
 Subscribe to `topic`, which may also use the MQTT protocol wildcards, such as `#`.  `-qos` sets a requested QOS level.
 
+* `-exec path-to-program [args] ...`
+
+Run a script when a payload response to `-subscribe` comes in.
+The topic will be stored in an evironment varible `MQTT_TOPIC`.
+The payload will be piped to stdin.
+
+This feature has not yet been ported to Windows.
+
 * `-wait`
 
 Default is off.
