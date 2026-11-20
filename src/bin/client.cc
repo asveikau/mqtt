@@ -61,11 +61,37 @@ struct
 #include <common/closefrom.h>
 #include <common/minmax.h>
 #include <limits.h>
+#include <sys/wait.h>
 
 static void
 PayloadToScript(const char *topic, const unsigned char *data, size_t length)
 {
    int r = 1;
+
+   static bool regd = false;
+
+   if (!regd)
+   {
+      struct sigaction sa = {0};
+
+      sigemptyset(&sa.sa_mask);
+
+      sa.sa_flags = SA_RESTART;
+
+      sa.sa_handler = [] (int sig) -> void
+      {
+         pid_t p;
+         int status;
+
+         while ((p = waitpid(0, &status, WNOHANG)) >= 0)
+         {
+         }
+      };
+
+      if (sigaction(SIGCHLD, nullptr, &sa))
+         perror("sigaction");
+      regd = true;
+   }
 
    pid_t pid = fork();
    if (pid == -1)
